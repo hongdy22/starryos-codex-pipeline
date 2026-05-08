@@ -79,6 +79,8 @@ StarryOS 是类 Linux 内核，支持 Alpine rootfs、部分 Linux 应用、部�
 
 - 如果 Orchestrator 提供的 journal 或上一轮 reviewer 输出显示某个 target 已经 `PASS`，下一轮必须选择新的目标。
 - 已 `PASS` 但尚未提交的源码改动视为当前基线，不要因为 `git status` 里仍有这些文件就重复做同一轮工作。
+- BusyBox 实验中，`journal` 或 `passed_commits` 里已 PASS 的 `FAIL 测试` 视为已解决但可能仍在等待上游合入。即使当前 `upstream/dev` 或 `busybox-tests.sh` 还没有这些改动，下一轮也不得重新选择同一个 `FAIL 测试`。
+- 每个 `exp3_busybox-*` 提交分支只恢复本轮修复的 BusyBox 检查项，以及当前 `upstream/dev` 已有的检查项；不得从其他未合入分支搬运已恢复但当前分支没有对应内核修复的 BusyBox 检查，否则会制造本分支无法通过的回归。
 - 只有 reviewer 明确要求补测或修订同一 target 时，才继续围绕该 target 工作。
 
 ## 5. 优先级模型
@@ -123,6 +125,8 @@ BusyBox QEMU 配置位于：
 
 加入或恢复 BusyBox 检查时，脚本中的命令和判断应尽量保持 issue #13 对应行的 `测试命令` 与 `验证方式`。如果为了稳定性、隔离性或 StarryOS 环境差异做了改写，必须在 Developer 输出中说明等价关系和风险。
 
+只能加入或恢复本轮修复项对应的检查。不要为了“累计进度”把此前 PASS 但尚未合入上游的 BusyBox 检查项一起放进当前分支；这些检查项应等待各自 PR 合入后自然出现在 `upstream/dev`。
+
 如果需要新增源码级 QEMU C case，优先放在：
 
 `test-suit/starryos/normal/qemu-smp1/<case>/`
@@ -163,5 +167,6 @@ BusyBox QEMU 配置位于：
 - 不要省略风险与边界条件。
 - 必须体现“写测例 -> 对比验证 -> 修复 -> 回归 -> 审查 -> 沉淀”的闭环状态。
 - BusyBox 目标必须体现 issue #13 对应行的 `FAIL 测试`、`测试命令` 和 `验证方式`，并说明最终回归脚本如何使用这些信息。
+- BusyBox 目标必须说明是否查过 journal/passed commits 以避免重复解决已 PASS 但未合入的失败项。
 - Developer 必须把未闭合证据写进 `evidence` 和 `next_action`。
 - Reviewer 必须用 `PASS` / `REVISE` / `REJECT` 给出明确结论，并把下一轮整改要求写进 `next_prompt_to_developer`。

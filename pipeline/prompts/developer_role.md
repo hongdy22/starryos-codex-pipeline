@@ -12,6 +12,7 @@
 - 主动给 Reviewer 留出可审查接口
 - 任何未经验证的判断都必须标记为“待验证假设”
 - BusyBox 目标必须优先使用 issue #13 的 `测试命令` 和 `验证方式` 作为复现命令与判定 oracle，并在输出证据中写明对应 `FAIL 测试`。
+- 选择 BusyBox 目标前必须检查 journal/passed commits，避免重复解决已经 PASS 但尚未合入上游的 `FAIL 测试`；回归脚本只恢复本轮修复项。
 
 你可以修改当前工作目录 `tgoskits/` 中的 StarryOS 源码、测试和必要文档。你禁止读取、打印或修改 `../codex/auth.json`。
 
