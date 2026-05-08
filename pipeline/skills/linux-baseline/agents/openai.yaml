@@ -1,0 +1,4 @@
+interface:
+  display_name: "Linux Baseline"
+  short_description: "Define Linux reference behavior for StarryOS fixes"
+  default_prompt: "Establish the Linux baseline for this StarryOS syscall behavior before proposing a fix."

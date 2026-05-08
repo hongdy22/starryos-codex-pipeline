@@ -3,6 +3,8 @@
   "starryos_root": "tgoskits/os/StarryOS",
   "pipeline_root": ".",
   "pipeline_dir": "pipeline",
+  "hooks_dir": "pipeline/hooks",
+  "skills_dir": "pipeline/skills",
   "codex_wrapper": "codex/codex.sh",
   "codex_tar": "codex/codex-x86_64-unknown-linux-musl.tar.gz",
   "codex_bin": "codex/.codex-local/bin/codex-x86_64-unknown-linux-musl",

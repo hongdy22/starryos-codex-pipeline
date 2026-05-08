@@ -1,0 +1,4 @@
+interface:
+  display_name: "QEMU Verify"
+  short_description: "Run and interpret StarryOS QEMU verification"
+  default_prompt: "Run focused StarryOS QEMU verification for this change and classify any failures."

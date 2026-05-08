@@ -1,0 +1,8 @@
+{
+  "enabled": true,
+  "fail_on_error": false,
+  "checks": [
+    "round_dir_exists"
+  ],
+  "commands": []
+}

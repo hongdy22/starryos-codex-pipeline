@@ -1,0 +1,13 @@
+{
+  "enabled": true,
+  "fail_on_error": true,
+  "checks": [
+    "project_root_exists",
+    "starryos_root_exists",
+    "codex_auth_exists",
+    "codex_auth_not_tracked",
+    "codex_auth_ignored",
+    "codex_binary_or_tarball_exists"
+  ],
+  "commands": []
+}

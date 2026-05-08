@@ -1,0 +1,10 @@
+{
+  "enabled": true,
+  "fail_on_error": false,
+  "checks": [
+    "round_dir_exists",
+    "schema_output_valid",
+    "reviewer_preserved_developer_diff"
+  ],
+  "commands": []
+}

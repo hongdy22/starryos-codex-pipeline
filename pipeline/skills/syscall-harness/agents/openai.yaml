@@ -1,0 +1,4 @@
+interface:
+  display_name: "Syscall Harness"
+  short_description: "Create minimal syscall differential regression tests"
+  default_prompt: "Design a minimal Linux/StarryOS differential syscall harness for this behavior."

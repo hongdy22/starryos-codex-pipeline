@@ -13,6 +13,13 @@ import tarfile
 from pathlib import Path
 from typing import Any
 
+SCRIPT_DIR = Path(__file__).resolve().parent
+if str(SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_DIR))
+
+from artifacts import capture_git_artifacts, write_pr_body_draft, write_round_summary, write_verification
+from hooks import HookRunner
+
 
 PIPELINE = Path(__file__).resolve().parents[1]
 ROOT = PIPELINE.parent
@@ -365,6 +372,10 @@ def main() -> int:
         raise PipelineError(f"project_root does not exist: {project_root}")
     if not as_path(config, "starryos_root").exists():
         raise PipelineError(f"starryos_root does not exist: {as_path(config, 'starryos_root')}")
+    hook_runner = HookRunner(root=ROOT, pipeline=PIPELINE, config=config)
+    preflight = hook_runner.run("preflight", dry_run=args.dry_run)
+    if hook_runner.has_blocking_failure(preflight):
+        raise PipelineError(f"preflight failed: {json.dumps(preflight, ensure_ascii=False)}")
 
     ROUNDS.mkdir(parents=True, exist_ok=True)
     RESULT_STATE.mkdir(parents=True, exist_ok=True)
@@ -424,10 +435,21 @@ def main() -> int:
                     "round_dir": str(round_dir.relative_to(ROOT)),
                 },
             )
+            write_verification(round_dir, {"hooks": {"preflight": preflight}, "dry_run": True})
+            write_round_summary(
+                round_dir=round_dir,
+                round_no=round_no,
+                developer=dry_dev,
+                reviewer=None,
+                hooks={"preflight": preflight},
+                artifacts={},
+            )
             print(json.dumps(dry_dev, ensure_ascii=False, indent=2))
             return 0
 
         assert codex_bin is not None and codex_env is not None
+        hook_results: dict[str, Any] = {"preflight": preflight}
+        artifact_results: dict[str, Any] = {}
         developer_output = run_codex_role(
             config=config,
             codex_bin=codex_bin,
@@ -438,6 +460,15 @@ def main() -> int:
             output_path=round_dir / "developer_output.json",
             event_log_path=round_dir / "developer_events.jsonl",
         )
+        developer_artifacts = capture_git_artifacts(project_root, round_dir, "developer")
+        artifact_results["developer_git"] = developer_artifacts
+        hook_results["post_developer"] = hook_runner.run(
+            "post_developer",
+            round_dir=round_dir,
+            schema_path=SCHEMAS / "developer.json",
+            output_path=round_dir / "developer_output.json",
+        )
+        developer_diff_hash = developer_artifacts["diff_hash"]
 
         reviewer_prompt = build_reviewer_prompt(config, round_no, developer_output)
         write_text(round_dir / "reviewer_prompt.txt", reviewer_prompt)
@@ -452,8 +483,40 @@ def main() -> int:
             output_path=round_dir / "reviewer_output.json",
             event_log_path=round_dir / "reviewer_events.jsonl",
         )
+        reviewer_artifacts = capture_git_artifacts(project_root, round_dir, "reviewer")
+        artifact_results["reviewer_git"] = reviewer_artifacts
+        hook_results["post_reviewer"] = hook_runner.run(
+            "post_reviewer",
+            round_dir=round_dir,
+            schema_path=SCHEMAS / "reviewer.json",
+            output_path=round_dir / "reviewer_output.json",
+            developer_diff_hash=developer_diff_hash,
+        )
 
         decision = reviewer_output["decision"]
+        if decision == "PASS":
+            hook_results["on_pass"] = hook_runner.run("on_pass", round_dir=round_dir)
+            artifact_results["pr_body_draft"] = write_pr_body_draft(round_dir, developer_output, reviewer_output)
+
+        write_verification(
+            round_dir,
+            {
+                "round": round_no,
+                "target": developer_output.get("target", ""),
+                "decision": decision,
+                "hooks": hook_results,
+                "artifacts": artifact_results,
+            },
+        )
+        write_round_summary(
+            round_dir=round_dir,
+            round_no=round_no,
+            developer=developer_output,
+            reviewer=reviewer_output,
+            hooks=hook_results,
+            artifacts=artifact_results,
+        )
+
         loop_state = {
             "last_round": round_no,
             "status": decision,

@@ -109,9 +109,11 @@ cargo xtask starry test qemu --arch riscv64 --test-group normal --test-case <cas
 ```text
 pipeline/
 ├── config.json
+├── hooks/
 ├── prompts/
 ├── schemas/
 ├── scripts/
+├── skills/
 └── results/     # 本地运行结果
 ```
 
@@ -134,6 +136,28 @@ pipeline/
 - `goal.md`：当前总体目标
 - `strategy.json`：选题优先级和 review 策略
 
+[pipeline/hooks/](pipeline/hooks)
+
+确定性的执行护栏，不交给 AI 自由发挥：
+
+- `preflight.json`：检查 `tgoskits`、StarryOS 路径、Codex auth、本地 Codex binary/tarball。
+- `post_developer.json`：校验 Developer JSON、保存 patch、记录 `git diff --check`。
+- `post_reviewer.json`：校验 Reviewer JSON，并检查 Reviewer 是否改变了 Developer diff。
+- `on_pass.json`：PASS 后生成本轮摘要和 PR body 草稿。
+
+[pipeline/skills/](pipeline/skills)
+
+Codex 可安装格式的短 playbook，每个 skill 都是独立目录：
+
+- `syscall-harness/SKILL.md`：syscall 源码级差分测例约定
+- `linux-baseline/SKILL.md`：Linux 行为基准定义约定
+- `qemu-verify/SKILL.md`：StarryOS QEMU 验证约定
+- `pr-ready/SKILL.md`：上游 PR 准备约定
+
+这些 skill 当前不自动注入 prompt，只作为框架资产保留，避免 prompt 变复杂。
+如果要让本机 Codex 直接发现某个 skill，可以把对应目录复制到
+`${CODEX_HOME:-~/.codex}/skills/`。
+
 [pipeline/schemas/](pipeline/schemas)
 
 Codex 最终输出必须符合的 JSON Schema：
@@ -146,10 +170,13 @@ Codex 最终输出必须符合的 JSON Schema：
 
 [pipeline/scripts/](pipeline/scripts)
 
-只保留一个脚本：
+核心脚本：
 
 ```text
 agent_loop.py    主调度器，负责拼 prompt、调 Codex、保存轮次结果
+checks.py        确定性检查：schema、git、auth、路径
+hooks.py         读取 hook 配置并执行检查/命令
+artifacts.py     保存 patch、git 状态、summary、PR body 草稿
 ```
 
 [pipeline/results/](pipeline/results)
@@ -186,9 +213,15 @@ pipeline/results/rounds/round-001/
 ├── developer_prompt.txt
 ├── developer_output.json
 ├── developer_events.jsonl
+├── developer.patch
+├── developer_diff_stat.txt
 ├── reviewer_prompt.txt
 ├── reviewer_output.json
-└── reviewer_events.jsonl
+├── reviewer_events.jsonl
+├── reviewer.patch
+├── verification.json
+├── summary.md
+└── pr_body_draft.md
 ```
 
 `dry-run` 只生成 Developer prompt 和一个占位输出，不调用 Codex。
