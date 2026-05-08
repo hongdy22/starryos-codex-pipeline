@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "round": { "type": "integer", "minimum": 1 },
+    "role": { "type": "string", "const": "DEVELOPER" },
+    "target": { "type": "string" },
+    "summary": { "type": "string" },
+    "priority_score": { "type": "number" },
+    "linux_baseline": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "tests": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "commands_run": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "evidence": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "changed_files": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "risks": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "reviewer_focus": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "next_action": { "type": "string" }
+  },
+  "required": [
+    "round",
+    "role",
+    "target",
+    "summary",
+    "priority_score",
+    "linux_baseline",
+    "tests",
+    "commands_run",
+    "evidence",
+    "changed_files",
+    "risks",
+    "reviewer_focus",
+    "next_action"
+  ]
+}

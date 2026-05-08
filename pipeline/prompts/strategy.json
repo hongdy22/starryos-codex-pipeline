@@ -1,0 +1,33 @@
+{
+  "priority_formula": {
+    "application_benefit": 0.3,
+    "generality_reuse": 0.2,
+    "verifiability": 0.15,
+    "implementation_control": 0.15,
+    "leverage": 0.1,
+    "regression_maintainability": 0.1
+  },
+  "initial_target_groups": [
+    {
+      "name": "file_directory_semantics",
+      "examples": ["openat", "rename", "link", "unlink", "fstatat"],
+      "why": "直接影响 busybox、coreutils、apk、编译工具链和脚本运行。"
+    },
+    {
+      "name": "process_wait_exit_semantics",
+      "examples": ["fork", "clone", "wait4", "exit_group", "execve", "pipe"],
+      "why": "shell、Python、gcc、包管理器和测试框架都依赖稳定进程模型。"
+    },
+    {
+      "name": "memory_mapping_semantics",
+      "examples": ["mmap", "munmap", "mprotect", "mremap", "brk"],
+      "why": "动态链接器、Python、gcc、数据库和多数复杂应用都依赖 mmap/权限语义。"
+    }
+  ],
+  "review_policy": {
+    "pass_requires_linux_baseline": true,
+    "pass_requires_starry_diff_or_explicit_no_bug_result": true,
+    "pass_requires_regression_asset_for_fix": true,
+    "reject_on_untested_patch": true
+  }
+}

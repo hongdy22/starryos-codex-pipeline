@@ -1,0 +1,37 @@
+{
+  "project_root": "tgoskits",
+  "starryos_root": "tgoskits/os/StarryOS",
+  "pipeline_root": ".",
+  "pipeline_dir": "pipeline",
+  "codex_wrapper": "codex/codex.sh",
+  "codex_tar": "codex/codex-x86_64-unknown-linux-musl.tar.gz",
+  "codex_bin": "codex/.codex-local/bin/codex-x86_64-unknown-linux-musl",
+  "codex_home": "codex/.codex-local/home",
+  "codex_auth_json": "codex/auth.json",
+  "default_arch": "riscv64",
+  "default_test_group": "normal",
+  "developer": {
+    "model": "gpt-5.5",
+    "reasoning_effort": "xhigh",
+    "service_tier": "fast",
+    "full_access": true,
+    "sandbox": "danger-full-access",
+    "ephemeral": true
+  },
+  "reviewer": {
+    "model": "gpt-5.5",
+    "reasoning_effort": "xhigh",
+    "service_tier": "fast",
+    "full_access": true,
+    "sandbox": "danger-full-access",
+    "ephemeral": true
+  },
+  "runner_commands": {
+    "starry_list_qemu": "cargo xtask starry test qemu --arch {arch} --list",
+    "starry_run_case": "cargo xtask starry test qemu --arch {arch} --test-group {group} --test-case {case}",
+    "starry_rootfs": "cargo xtask starry rootfs --arch {arch}",
+    "starry_build": "cargo xtask starry build --arch {arch}",
+    "fmt": "cargo fmt",
+    "clippy_starry_kernel": "cargo xtask clippy --package starry-kernel"
+  }
+}

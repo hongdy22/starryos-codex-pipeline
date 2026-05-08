@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "round": { "type": "integer", "minimum": 1 },
+    "role": { "type": "string", "const": "REVIEWER" },
+    "decision": {
+      "type": "string",
+      "enum": ["PASS", "REVISE", "REJECT"]
+    },
+    "summary": { "type": "string" },
+    "evidence_gaps": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "required_changes": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "risks": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "approved_artifacts": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "next_prompt_to_developer": { "type": "string" }
+  },
+  "required": [
+    "round",
+    "role",
+    "decision",
+    "summary",
+    "evidence_gaps",
+    "required_changes",
+    "risks",
+    "approved_artifacts",
+    "next_prompt_to_developer"
+  ]
+}

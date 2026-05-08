@@ -1,0 +1,39 @@
+# Python/runtime cache
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Editor/OS noise
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# Local secrets and Codex login state
+.env
+.env.*
+!.env.example
+codex/auth.json
+codex/**/auth.json
+codex/.codex-local/
+
+# Local Codex binary/archive. Keep codex/codex.sh, but do not vendor binaries.
+codex/*.tar.gz
+codex/codex-*
+
+# External StarryOS checkout. Clone it locally; do not vendor it in this repo.
+tgoskits/
+
+# Pipeline run outputs
+pipeline/results/**
+!pipeline/results/
+!pipeline/results/rounds/
+!pipeline/results/rounds/.gitkeep
+!pipeline/results/state/
+!pipeline/results/state/.gitkeep
+
+# Logs and temporary files
+*.log
+*.tmp
