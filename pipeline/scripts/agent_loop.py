@@ -5,6 +5,7 @@ import argparse
 import datetime as dt
 import json
 import os
+import re
 import shutil
 import stat
 import subprocess
@@ -173,6 +174,248 @@ def git_remotes(project_root: Path) -> str:
     return proc.stdout.strip()
 
 
+def git_text(project_root: Path, args: list[str]) -> str:
+    proc = run_cmd(["git", *args], project_root)
+    if proc.returncode != 0:
+        raise PipelineError(f"git {' '.join(args)} failed: {proc.stderr.strip()}")
+    return proc.stdout.strip()
+
+
+def git_status_porcelain(project_root: Path) -> str:
+    return git_text(project_root, ["status", "--porcelain"])
+
+
+def ensure_clean_worktree(project_root: Path, reason: str) -> None:
+    status = git_status_porcelain(project_root)
+    if status:
+        raise PipelineError(f"{reason}: tgoskits worktree is not clean:\n{status}")
+
+
+def current_branch(project_root: Path) -> str:
+    return git_text(project_root, ["branch", "--show-current"])
+
+
+def current_head(project_root: Path) -> str:
+    return git_text(project_root, ["rev-parse", "HEAD"])
+
+
+def safe_slug(value: str, *, default: str = "starryos-change", limit: int = 48) -> str:
+    slug = re.sub(r"[^A-Za-z0-9._-]+", "-", value.lower()).strip("-._")
+    slug = re.sub(r"-{2,}", "-", slug)
+    return (slug or default)[:limit].strip("-._") or default
+
+
+def branch_exists(project_root: Path, name: str) -> bool:
+    return run_cmd(["git", "show-ref", "--verify", "--quiet", f"refs/heads/{name}"], project_root).returncode == 0
+
+
+def unique_branch_name(project_root: Path, prefix: str, round_no: int, target: str) -> str:
+    stamp = dt.datetime.now(dt.timezone.utc).strftime("%Y%m%d%H%M%S")
+    base = f"{prefix}-{round_no:03d}-{safe_slug(target)}-{stamp}"
+    candidate = base
+    index = 2
+    while branch_exists(project_root, candidate):
+        candidate = f"{base}-{index}"
+        index += 1
+    return candidate
+
+
+def restore_git_base(project_root: Path, base_branch: str, base_head: str, commands_run: list[str]) -> tuple[str, str]:
+    if base_branch:
+        cmd = ["git", "switch", base_branch]
+    else:
+        cmd = ["git", "switch", "--detach", base_head]
+    commands_run.append(" ".join(cmd))
+    proc = run_cmd(cmd, project_root)
+    if proc.returncode != 0:
+        raise PipelineError(f"failed to restore base checkout: {proc.stderr.strip()}")
+    restored_head = current_head(project_root)
+    if restored_head != base_head:
+        # The branch may have moved unexpectedly while this loop was running.
+        # Stop instead of resetting silently.
+        raise PipelineError(
+            f"restored base HEAD mismatch: expected {base_head[:12]}, got {restored_head[:12]}"
+        )
+    ensure_clean_worktree(project_root, "after restoring base checkout")
+    return current_branch(project_root), restored_head
+
+
+def commit_subject(developer: dict[str, Any]) -> str:
+    target = developer.get("target") or developer.get("summary") or "StarryOS AI pipeline change"
+    first_line = str(target).splitlines()[0].strip()
+    if not first_line:
+        first_line = "StarryOS AI pipeline change"
+    return first_line[:90]
+
+
+def commit_passed_round(
+    *,
+    config: dict[str, Any],
+    project_root: Path,
+    round_no: int,
+    developer: dict[str, Any],
+    reviewer: dict[str, Any],
+    base_branch: str,
+    base_head: str,
+) -> dict[str, Any]:
+    committer_config = config.get("committer", {})
+    remote = committer_config.get("remote", "origin")
+    commands_run: list[str] = []
+    changed_files: list[str] = []
+    output: dict[str, Any] = {
+        "round": round_no,
+        "role": "COMMITTER",
+        "status": "BLOCKED",
+        "summary": "",
+        "base_branch": base_branch,
+        "base_head": base_head,
+        "commit_branch": "",
+        "commit_hash": "",
+        "remote": remote,
+        "pushed": False,
+        "restored_branch": "",
+        "restored_head": "",
+        "changed_files": changed_files,
+        "commands_run": commands_run,
+        "next_action": "",
+    }
+
+    if not committer_config.get("enabled", True):
+        output.update(
+            {
+                "status": "SKIPPED",
+                "summary": "Committer is disabled in config.",
+                "next_action": "No commit branch was created.",
+            }
+        )
+        return output
+
+    try:
+        if not git_status_porcelain(project_root):
+            output.update(
+                {
+                    "status": "SKIPPED",
+                    "summary": "Reviewer returned PASS but there are no working tree changes to commit.",
+                    "restored_branch": current_branch(project_root),
+                    "restored_head": current_head(project_root),
+                    "next_action": "No branch was created because the worktree is clean.",
+                }
+            )
+            return output
+
+        branch = unique_branch_name(
+            project_root,
+            str(committer_config.get("branch_prefix", "codex/round")),
+            round_no,
+            str(developer.get("target") or "starryos-change"),
+        )
+        output["commit_branch"] = branch
+
+        cmd = ["git", "switch", "-c", branch]
+        commands_run.append(" ".join(cmd))
+        proc = run_cmd(cmd, project_root)
+        if proc.returncode != 0:
+            raise PipelineError(proc.stderr.strip())
+
+        cmd = ["git", "add", "-A"]
+        commands_run.append(" ".join(cmd))
+        proc = run_cmd(cmd, project_root)
+        if proc.returncode != 0:
+            raise PipelineError(proc.stderr.strip())
+
+        changed_files_text = git_text(project_root, ["diff", "--cached", "--name-only"])
+        changed_files[:] = [line for line in changed_files_text.splitlines() if line]
+        if not changed_files:
+            raise PipelineError("no staged files after git add -A")
+
+        subject = commit_subject(developer)
+        body = "\n".join(
+            [
+                f"Pipeline round: {round_no}",
+                f"Reviewer decision: {reviewer.get('decision', '')}",
+                f"Reviewer summary: {reviewer.get('summary', '')}",
+            ]
+        )
+        cmd = ["git", "commit", "-m", subject, "-m", body]
+        commands_run.append("git commit -m <subject> -m <body>")
+        proc = run_cmd(cmd, project_root)
+        if proc.returncode != 0:
+            raise PipelineError(proc.stderr.strip())
+
+        commit_hash = current_head(project_root)
+        output["commit_hash"] = commit_hash
+
+        if committer_config.get("push", True):
+            cmd = ["git", "push", "-u", remote, branch]
+            commands_run.append(" ".join(cmd))
+            proc = run_cmd(cmd, project_root)
+            if proc.returncode != 0:
+                raise PipelineError(proc.stderr.strip())
+            output["pushed"] = True
+
+        if committer_config.get("restore_base_after_commit", True):
+            restored_branch, restored_head = restore_git_base(project_root, base_branch, base_head, commands_run)
+        else:
+            restored_branch, restored_head = current_branch(project_root), current_head(project_root)
+
+        output.update(
+            {
+                "status": "COMMITTED",
+                "summary": f"Committed PASS round to {branch} at {commit_hash[:12]}.",
+                "restored_branch": restored_branch,
+                "restored_head": restored_head,
+                "next_action": "Open an upstream PR manually when this commit branch is ready for external review.",
+            }
+        )
+    except Exception as exc:
+        if output.get("commit_hash") and committer_config.get("restore_base_after_commit", True):
+            try:
+                restored_branch, restored_head = restore_git_base(project_root, base_branch, base_head, commands_run)
+                output["restored_branch"] = restored_branch
+                output["restored_head"] = restored_head
+            except Exception:
+                pass
+        try:
+            output["restored_branch"] = current_branch(project_root)
+            output["restored_head"] = current_head(project_root)
+        except Exception:
+            pass
+        output["summary"] = f"Committer failed: {exc}"
+        output["next_action"] = "Inspect tgoskits git state manually before continuing the loop."
+    return output
+
+
+def passed_commits_path() -> Path:
+    return RESULT_STATE / "passed_commits.json"
+
+
+def read_passed_commits(limit: int = 12) -> list[dict[str, Any]]:
+    data = read_json(passed_commits_path(), default=[])
+    if not isinstance(data, list):
+        return []
+    return data[-limit:]
+
+
+def append_passed_commit(round_no: int, developer: dict[str, Any], committer: dict[str, Any]) -> None:
+    data = read_json(passed_commits_path(), default=[])
+    if not isinstance(data, list):
+        data = []
+    data.append(
+        {
+            "round": round_no,
+            "target": developer.get("target", ""),
+            "summary": developer.get("summary", ""),
+            "branch": committer.get("commit_branch", ""),
+            "commit": committer.get("commit_hash", ""),
+            "remote": committer.get("remote", ""),
+            "pushed": committer.get("pushed", False),
+            "changed_files": committer.get("changed_files", []),
+            "created_at": utc_now(),
+        }
+    )
+    write_json(passed_commits_path(), data)
+
+
 def build_syncer_prompt(config: dict[str, Any], round_no: int) -> str:
     project_root = as_path(config, "project_root")
     sync_config = config.get("sync", {})
@@ -226,6 +469,7 @@ def build_developer_prompt(
         json.dumps(startup_sync, ensure_ascii=False, indent=2) if startup_sync else "本轮没有新的启动同步结果。"
     )
     journal_block = read_text(RESULT_STATE / "journal.md", "暂无已完成轮次。")[:12000]
+    passed_commits_block = json.dumps(read_passed_commits(), ensure_ascii=False, indent=2)
 
     return f"""{read_text(PROMPTS / "developer_role.md")}
 
@@ -239,6 +483,9 @@ def build_developer_prompt(
 
 # 已完成轮次摘要
 {journal_block}
+
+# 已 PASS 并提交到 fork 分支的成果
+{passed_commits_block}
 
 # 当前轮次
 round = {round_no}
@@ -262,7 +509,7 @@ head = {snapshot.get("head", "")}
 - 严格输出符合 `pipeline/schemas/developer.json` 的 JSON。
 - 如果本轮修改代码，必须在 `changed_files`、`commands_run`、`evidence` 中写清楚。
 - 如果证据链未闭合，必须在 `summary`、`evidence`、`next_action` 中写清楚缺口。
-- 如果上一轮或 journal 中某个 target 已经 `PASS`，不要重复选择同一个 target；已通过但尚未提交的源码改动视为当前基线。
+- 如果上一轮、journal 或 passed commits 中某个 target 已经 `PASS`，不要重复选择同一个 target；即使当前 git diff 已经被切回基线，也要把这些已提交分支视为已完成成果。
 - 不要输出 Markdown，不要输出 schema 之外的字段。
 """
 
@@ -386,15 +633,28 @@ def run_codex_role(
     return load_agent_output(output_path)
 
 
-def append_journal(round_no: int, developer: dict[str, Any], reviewer: dict[str, Any]) -> None:
+def append_journal(
+    round_no: int,
+    developer: dict[str, Any],
+    reviewer: dict[str, Any],
+    committer: dict[str, Any] | None = None,
+) -> None:
     journal = RESULT_STATE / "journal.md"
     existing = read_text(journal, "# StarryOS AI Pipeline Journal\n\n---\n")
+    commit_lines = ""
+    if committer:
+        commit_lines = f"""- commit status: {committer.get("status", "")}
+- commit branch: {committer.get("commit_branch", "")}
+- commit hash: {committer.get("commit_hash", "")}
+- pushed: {committer.get("pushed", False)}
+"""
     entry = f"""## {utc_now()} round-{round_no:03d}
 
 - target: {developer.get("target", "")}
 - developer: {developer.get("summary", "")}
 - reviewer decision: {reviewer.get("decision", "")}
 - reviewer: {reviewer.get("summary", "")}
+{commit_lines}
 
 """
     marker = "---\n"
@@ -514,10 +774,13 @@ def main() -> int:
                     },
                 )
                 raise PipelineError(f"syncer blocked pipeline: {startup_sync_output.get('next_action', '')}")
+            ensure_clean_worktree(project_root, "after syncer READY")
 
     for round_no in range(first_round, first_round + args.max_rounds):
         round_dir = ROUNDS / f"round-{round_no:03d}"
         round_dir.mkdir(parents=True, exist_ok=True)
+        round_base_branch = current_branch(project_root)
+        round_base_head = current_head(project_root)
 
         dev_prompt = build_developer_prompt(
             config,
@@ -630,9 +893,31 @@ def main() -> int:
         )
 
         decision = reviewer_output["decision"]
+        committer_output: dict[str, Any] | None = None
         if decision == "PASS":
             hook_results["on_pass"] = hook_runner.run("on_pass", round_dir=round_dir)
             artifact_results["pr_body_draft"] = write_pr_body_draft(round_dir, developer_output, reviewer_output)
+            committer_output = commit_passed_round(
+                config=config,
+                project_root=project_root,
+                round_no=round_no,
+                developer=developer_output,
+                reviewer=reviewer_output,
+                base_branch=round_base_branch,
+                base_head=round_base_head,
+            )
+            committer_path = round_dir / "committer_output.json"
+            write_json(committer_path, committer_output)
+            artifact_results["committer_output"] = str(committer_path)
+            artifact_results["committer_git"] = capture_git_artifacts(project_root, round_dir, "committer")
+            hook_results["post_committer"] = hook_runner.run(
+                "post_committer",
+                round_dir=round_dir,
+                schema_path=SCHEMAS / "committer.json",
+                output_path=committer_path,
+            )
+            if committer_output.get("status") == "COMMITTED":
+                append_passed_commit(round_no, developer_output, committer_output)
 
         write_verification(
             round_dir,
@@ -640,6 +925,7 @@ def main() -> int:
                 "round": round_no,
                 "target": developer_output.get("target", ""),
                 "decision": decision,
+                "committer": committer_output,
                 "hooks": hook_results,
                 "artifacts": artifact_results,
             },
@@ -657,11 +943,13 @@ def main() -> int:
             "last_round": round_no,
             "status": decision,
             "current_target": developer_output.get("target", ""),
+            "commit_branch": committer_output.get("commit_branch", "") if committer_output else "",
+            "commit_hash": committer_output.get("commit_hash", "") if committer_output else "",
             "updated_at": utc_now(),
             "round_dir": str(round_dir.relative_to(ROOT)),
         }
         write_json(loop_state_path, loop_state)
-        append_journal(round_no, developer_output, reviewer_output)
+        append_journal(round_no, developer_output, reviewer_output, committer_output)
 
         print(
             json.dumps(
@@ -670,6 +958,8 @@ def main() -> int:
                     "target": developer_output.get("target", ""),
                     "decision": decision,
                     "summary": reviewer_output.get("summary", ""),
+                    "commit_branch": committer_output.get("commit_branch", "") if committer_output else "",
+                    "commit_hash": committer_output.get("commit_hash", "") if committer_output else "",
                     "round_dir": str(round_dir.relative_to(ROOT)),
                 },
                 ensure_ascii=False,
@@ -677,6 +967,8 @@ def main() -> int:
             )
         )
 
+        if committer_output and committer_output.get("status") == "BLOCKED":
+            return 1
         if decision == "PASS" and not args.continue_after_pass:
             return 0
         previous_review = reviewer_output

@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "round": { "type": "integer", "minimum": 1 },
+    "role": { "type": "string", "const": "COMMITTER" },
+    "status": {
+      "type": "string",
+      "enum": ["COMMITTED", "SKIPPED", "BLOCKED"]
+    },
+    "summary": { "type": "string" },
+    "base_branch": { "type": "string" },
+    "base_head": { "type": "string" },
+    "commit_branch": { "type": "string" },
+    "commit_hash": { "type": "string" },
+    "remote": { "type": "string" },
+    "pushed": { "type": "boolean" },
+    "restored_branch": { "type": "string" },
+    "restored_head": { "type": "string" },
+    "changed_files": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "commands_run": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "next_action": { "type": "string" }
+  },
+  "required": [
+    "round",
+    "role",
+    "status",
+    "summary",
+    "base_branch",
+    "base_head",
+    "commit_branch",
+    "commit_hash",
+    "remote",
+    "pushed",
+    "restored_branch",
+    "restored_head",
+    "changed_files",
+    "commands_run",
+    "next_action"
+  ]
+}

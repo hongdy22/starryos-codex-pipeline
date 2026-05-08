@@ -42,6 +42,13 @@
     "sandbox": "danger-full-access",
     "ephemeral": true
   },
+  "committer": {
+    "enabled": true,
+    "remote": "origin",
+    "branch_prefix": "codex/round",
+    "push": true,
+    "restore_base_after_commit": true
+  },
   "runner_commands": {
     "starry_list_qemu": "cargo xtask starry test qemu --arch {arch} --list",
     "starry_run_case": "cargo xtask starry test qemu --arch {arch} --test-group {group} --test-case {case}",

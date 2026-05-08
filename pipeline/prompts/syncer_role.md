@@ -28,6 +28,7 @@ READY 条件：
 - 已经 fetch 到最新 `upstream/dev`。
 - 当前 HEAD 包含最新 `upstream/dev`，或你明确说明当前仓库已经处于等价的最新上游状态。
 - 没有未解决的 merge/rebase/cherry-pick 冲突。
+- `git status --short` 干净；如果启动时有用户未提交改动，必须先安全保存或明确返回 `BLOCKED`。
 - 没有你自己遗留的临时文件。
 - 已有用户改动没有被丢弃。
 

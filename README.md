@@ -15,7 +15,10 @@ Developer Codex 写测例/跑差分/修补丁
 Reviewer Codex 复核证据链/必要时执行验证
         |
         v
-PASS 默认停止，REVISE/REJECT 进入下一轮
+PASS 后 Committer 新建分支 commit 并 push 到 fork
+        |
+        v
+切回本轮修改前的基线，REVISE/REJECT 则保留 diff 继续修
 ```
 
 ## 1. 顶层目录
@@ -128,6 +131,7 @@ pipeline/
 - `StarryOS` 相对路径
 - Codex binary、tarball、auth 路径
 - Syncer/Developer/Reviewer 的模型、推理强度、沙箱策略
+- Committer 的目标 remote、分支前缀、是否 push
 
 [pipeline/prompts/](pipeline/prompts)
 
@@ -148,6 +152,7 @@ pipeline/
 - `post_syncer.json`：校验 Syncer JSON，并记录同步后的 `git diff --check`。
 - `post_developer.json`：校验 Developer JSON、保存 patch、记录 `git diff --check`。
 - `post_reviewer.json`：校验 Reviewer JSON，并检查 Reviewer 是否改变了 Developer diff。
+- `post_committer.json`：校验 Committer JSON，并确认提交后工作区没有格式空白问题。
 - `on_pass.json`：PASS 后生成本轮摘要和 PR body 草稿。
 
 [pipeline/skills/](pipeline/skills)
@@ -170,6 +175,7 @@ Codex 最终输出必须符合的 JSON Schema：
 - `syncer.json`
 - `developer.json`
 - `reviewer.json`
+- `committer.json`
 
 脚本靠这些 schema 稳定读取 `target`、`evidence`、`decision` 等字段。
 当前 schema 刻意保持很小，只保留闭环调度需要的字段，不把完整报告结构强塞进 JSON。
@@ -192,7 +198,7 @@ artifacts.py     保存 patch、git 状态、summary、PR body 草稿
 ```text
 pipeline/results/
 ├── rounds/   # 每轮 prompt、Codex 输出、事件日志
-└── state/    # loop_state.json 和 journal.md
+└── state/    # loop_state.json、journal.md 和 passed_commits.json
 ```
 
 `results/` 会随运行增长，不是核心代码。
@@ -212,7 +218,9 @@ pipeline/results/
 8. 生成 Reviewer prompt
 9. 调用 Reviewer Codex，拥有完整执行权限，但 prompt 要求不要留下源码改动
 10. 保存 reviewer_output.json
-11. Reviewer PASS 则停止，否则把意见带入下一轮
+11. Reviewer PASS 后，Committer 新建分支、commit、push 到 fork
+12. Committer 切回本轮修改前的基线分支/HEAD
+13. REVISE/REJECT 不 commit，保留当前 diff，把意见带入下一轮继续修
 ```
 
 输出示例：
@@ -232,6 +240,8 @@ pipeline/results/rounds/round-001/
 ├── reviewer_output.json
 ├── reviewer_events.jsonl
 ├── reviewer.patch
+├── committer_output.json
+├── committer_git_status.txt
 ├── verification.json
 ├── summary.md
 └── pr_body_draft.md
@@ -264,6 +274,7 @@ round number
 git branch / HEAD
 git status --short
 pipeline/results/state/journal.md 的最近轮次摘要
+pipeline/results/state/passed_commits.json 的已提交成果
 上一轮 reviewer_output.json 的 PASS / REVISE / REJECT 意见
 ```
 
@@ -271,6 +282,19 @@ prompt 不内嵌完整 `git diff`。Codex 需要时自己运行 `git diff` 和�
 如果某个 target 已经 `PASS`，下一轮 prompt 会明确要求 Developer 不要重复选择它；只有 Reviewer 要求补测或修订时，才继续同一个 target。
 
 Syncer prompt 只在每次 loop 启动后的第一轮前生成一次。它会让 Codex 自己检查远端、fetch 最新 `upstream/dev`、处理 rebase/冲突，并输出 `READY` 或 `BLOCKED`。这样仓库更新逻辑不靠脚本硬编码，遇到复杂冲突时由 Codex 读代码后处理。
+
+Committer 不是 AI agent，而是脚本里的确定性阶段。Reviewer 返回 `PASS` 后，它会：
+
+```text
+1. 记录本轮开始前的 branch/HEAD
+2. 从当前 diff 新建一个 `codex/round-...` 分支
+3. `git add -A` 并提交
+4. push 到 fork remote，默认是 `origin`
+5. 切回本轮开始前的 branch/HEAD
+6. 把 branch、commit、changed files 写入 passed_commits.json 和 journal
+```
+
+它不会自动打开 PR，也不会自动更新 fork 的 `dev` 分支。feature 分支直接基于本地最新 `upstream/dev` 推到 fork 即可；fork 的 `origin/dev` 是否同步不影响这些 feature 分支创建和后续手动 PR。
 
 ## 7. StarryOS 测试约定
 
@@ -307,3 +331,4 @@ tgoskits/test-suit/starryos/normal/qemu-smp1/<case>/
 - 单轮只处理一个明确问题或一组强相关 syscall 语义。
 - Reviewer 可以跑验证命令，但不应接管 Developer 的实现；如果临时修改文件，结束前必须只恢复自己的改动。
 - Reviewer 返回 `REVISE` 或 `REJECT` 时，不进入下一个目标。
+- Reviewer 返回 `PASS` 后才允许 Committer 提交；提交后下一轮从基线分支继续，不能依赖当前 `git diff` 记住旧成果。
