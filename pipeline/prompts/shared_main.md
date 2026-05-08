@@ -28,6 +28,7 @@ Orchestrator 会把 Codex 工作目录设置为 `tgoskits/`，所以你看到的
 共同目标：
 
 以最小、可验证、可回归的方式持续改进 StarryOS，让其以 20% 的实现规模覆盖 80% 的常用 Linux 功能，并形成可复用、可评估、可共享的测试和工程资产。
+当前实验分支 `exp3_busybox` 的直接目标是提升 StarryOS 对 BusyBox 这一 Linux 小应用集合的兼容性。
 
 Reviewer 权限边界：
 
@@ -43,18 +44,18 @@ StarryOS 是类 Linux 内核，支持 Alpine rootfs、部分 Linux 应用、部�
 
 - syscall 缺失或语义不完整
 - Linux 通用能力不足
-- 常用应用兼容性不足
+- BusyBox applet 与 shell 脚本兼容性不足
 - 性能、稳定性、安全性仍需提升
 
 默认优先架构是 `riscv64`。如果只验证一个架构，必须说明跨架构风险。
 
 ## 3. 最高优先级原则
 
-1. 测试先行：先定义 Linux 基准，先写最小用户态测例，先做 Linux/StarryOS 差分，再修复。
+1. 测试先行：先定义 Linux BusyBox 基准，先写或复用最小用户态/app 脚本测例，先做 Linux/StarryOS 差分，再修复。
 2. 最小改动：单轮只处理一个明确问题或一组强相关问题，不夹带无关重构。
 3. 证据驱动：问题必须有复现证据，修复必须有验证证据，回归必须有通过证据。
-4. Linux 作为行为基准：返回值、errno、stdout/stderr、副作用、阻塞语义、并发语义和资源释放语义都以 Linux 为准。
-5. Harness 优先于 patch：每次修复至少沉淀 1 个长期测试资产。
+4. Linux 作为行为基准：BusyBox 命令的返回码、stdout/stderr、副作用，以及底层 syscall 的返回值、errno、阻塞/并发语义和资源释放语义都以 Linux 为准。
+5. Harness 优先于 patch：每次修复至少沉淀 1 个长期 BusyBox 回归资产；必要时再补最小 syscall 语义差分 harness。
 6. Reviewer 有否决权：`REVISE` 或 `REJECT` 表示当前轮次未闭合。
 7. 多架构意识：默认考虑 x86_64、aarch64、riscv64、loongarch64 的一致性。
 
@@ -62,17 +63,17 @@ StarryOS 是类 Linux 内核，支持 Alpine rootfs、部分 Linux 应用、部�
 
 每一轮必须按顺序推进：
 
-1. 选定本轮目标：仅限 syscall 缺失、syscall/内核语义不完整、或常用 Linux 程序失败且可归因到有限内核范围。
-2. 建立 Linux 基准：正常输入、非法输入、边界条件、errno、副作用、阻塞/并发语义。
-3. 设计最小用户态测试：优先 C 程序，能在 Linux 和 StarryOS 上自动化运行并输出可比对结果。
-4. 执行 Linux/StarryOS 差分验证：比较返回值、errno、输出、副作用、hang/crash/deadlock。
+1. 选定本轮目标：优先从 <https://github.com/rcore-os/linux-compatible-testsuit/issues/13> 的 BusyBox 失败项中选择一个 applet，或选择由同一根因导致的一小组强相关 applet。
+2. 建立 Linux BusyBox 基准：在 Linux 上运行等价 BusyBox 命令或最小脚本，记录返回码、stdout/stderr、文件系统/网络/进程副作用，以及必要的 syscall 行为。
+3. 设计最小用户态/app 测试：优先使用 shell 命令片段或 `busybox-tests.sh` 风格脚本；如果必须定位内核语义，再补 C syscall harness。
+4. 执行 Linux/StarryOS 差分验证：在 StarryOS riscv64 QEMU 中运行 BusyBox case 或聚焦命令，比较返回码、stdout/stderr、errno、副作用、hang/crash/deadlock。
 5. 根因分析：定位源码文件、数据结构、状态机、锁、资源生命周期和具体缺陷类型。
 6. 形成最小修复补丁：局部、可解释、不夹带无关改动。
-7. 回归验证：复现用例、相邻语义 smoke、已有相关 harness、必要时 LTP 或应用级 smoke。
+7. 回归验证：复现用例、BusyBox 全量或聚焦 QEMU case、相邻 applet smoke、已有相关 harness、必要时 syscall 级 smoke。
 8. Reviewer 审查：输出 `PASS` / `REVISE` / `REJECT`。
 9. 文档沉淀：问题定义、Linux 基准、StarryOS 当前行为、差分证据、根因、修复、测试、回归、reviewer 结论、后续 TODO。
 
-任何测试若不能区分 Linux 与 StarryOS 行为差异，都不是高质量 harness。任何结论若无测试证据支撑，只能算“待验证假设”。
+任何测试若不能区分 Linux BusyBox 与 StarryOS BusyBox 行为差异，都不是高质量 harness。任何结论若无测试证据支撑，只能算“待验证假设”。
 
 跨轮次选择约束：
 
@@ -88,13 +89,11 @@ StarryOS 是类 Linux 内核，支持 Alpine rootfs、部分 Linux 应用、部�
 
 优先关注：
 
-1. 进程/线程基础语义
-2. 文件与目录基础语义
-3. 内存映射与页权限语义
-4. 信号、等待、退出、僵尸回收语义
-5. poll/select/epoll 事件语义
-6. 与 `apk`、`gcc`、`python`、shell、coreutils 直接相关的 syscall 缺口
-7. 能提升 Alpine 用户态可用性的通用能力
+1. BusyBox 失败列表中能用短命令稳定复现的 applet。
+2. 文件与目录类 applet：`chown`、`cpio`、`link`、`mkdir`、`mv`、`rmdir`、`split`、`tail`、`tar` 等。
+3. 进程、shell、定时任务类 applet：`crond`、`crontab`、`env`、`nice`、`nohup`、`pidof`、`run-parts` 等。
+4. 网络、设备、proc/sys 类 applet：`arp`、`arping`、`ifconfig`、`ip`、`ping`、`blkid`、`blockdev` 等。
+5. 一次修复能解锁多个 BusyBox applet 的通用 syscall 或伪文件系统能力。
 
 如果无法设计最小差分测例、需要大规模重构、修复风险远大于收益，必须降级或搁置。
 
@@ -105,13 +104,24 @@ StarryOS 是类 Linux 内核，支持 Alpine rootfs、部分 Linux 应用、部�
 ```bash
 cargo xtask starry test qemu --arch riscv64 --list
 cargo xtask starry test qemu --arch riscv64 --test-group normal --test-case <case>
+cargo xtask starry test qemu --arch riscv64 --test-group normal --test-case busybox
 ```
 
 测试目录约定见：
 
 - `test-suit/starryos/GUIDE.md`
 
-新增 QEMU C case 优先放在：
+BusyBox 通过项脚本位于：
+
+`test-suit/starryos/normal/qemu-smp1/busybox/sh/busybox-tests.sh`
+
+BusyBox QEMU 配置位于：
+
+`test-suit/starryos/normal/qemu-smp1/busybox/qemu-riscv64.toml`
+
+修复某个 BusyBox 失败项后，优先把该 applet 的可维护检查加入 `busybox-tests.sh`，并确保 riscv64 `busybox` case 通过。
+
+如果需要新增源码级 QEMU C case，优先放在：
 
 `test-suit/starryos/normal/qemu-smp1/<case>/`
 

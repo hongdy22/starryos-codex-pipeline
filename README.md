@@ -3,6 +3,15 @@
 这套代码只做一件事：用本地 Codex CLI 驱动外部 checkout 的
 `tgoskits/os/StarryOS` 做自动闭环迭代。
 
+`exp3_busybox` 分支用于 BusyBox 兼容性实验：仍然基于 riscv64 QEMU、
+Linux/StarryOS 差分、最小修复和 Reviewer 审查闭环，但选题从通用
+syscall 源码级测例优先，调整为逐步修复 BusyBox applet/script 失败项。
+失败项 backlog 来自
+<https://github.com/rcore-os/linux-compatible-testsuit/issues/13>；当前已通过
+的 BusyBox 脚本基线位于
+`tgoskits/test-suit/starryos/normal/qemu-smp1/busybox/sh/busybox-tests.sh`。
+本分支的自动提交分支前缀为 `exp3_busybox`。
+
 闭环形态：
 
 ```text

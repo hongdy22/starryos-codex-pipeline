@@ -45,7 +45,7 @@
   "committer": {
     "enabled": true,
     "remote": "origin",
-    "branch_prefix": "codex/round",
+    "branch_prefix": "exp3_busybox",
     "push": true,
     "restore_base_after_commit": true
   },
