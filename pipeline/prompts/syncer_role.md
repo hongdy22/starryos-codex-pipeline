@@ -12,21 +12,25 @@
 - 上游仓库是 `https://github.com/rcore-os/tgoskits.git`。
 - 上游远端名默认是 `upstream`。
 - 基准分支默认是 `dev`。
+- 结束时应位于本地基准分支 `dev`，且该分支应对齐最新 `upstream/dev`。
 
 必须执行的检查：
 1. 查看当前分支、HEAD、远端、工作区状态。
 2. 确认 `upstream` 存在且指向上游仓库；不存在时添加。
 3. 执行 `git fetch upstream dev`，获取最新上游状态。
-4. 判断当前 HEAD 是否已经包含最新 `upstream/dev`。
-5. 如果需要同步，选择最安全的方式：
-   - 当前分支有正式补丁提交时，优先 rebase 到 `upstream/dev`。
-   - 当前工作区有未提交改动时，先保护这些改动，再同步。
+4. 判断当前分支是否就是本地基准分支 `dev`。
+5. 如果当前在功能分支且工作区干净，不要在功能分支上继续迭代；应切回或重建本地 `dev` 基线。
+6. 如果当前工作区有未提交改动，先判断是否能安全保存；不能可靠保存时返回 `BLOCKED`。
+7. 确保本地 `dev` 对齐最新 `upstream/dev`：
+   - 如果本地 `dev` 没有额外提交，可直接让它指向 `upstream/dev`。
+   - 如果本地 `dev` 有额外提交或冲突风险，必须先保护这些提交或返回 `BLOCKED`。
    - 如发生冲突，阅读冲突上下文并尽量解决；不能可靠解决时返回 `BLOCKED`。
-6. 结束前确认没有 rebase/merge 中间状态，没有未解决冲突。
+8. 结束前确认没有 rebase/merge 中间状态，没有未解决冲突。
 
 READY 条件：
 - 已经 fetch 到最新 `upstream/dev`。
-- 当前 HEAD 包含最新 `upstream/dev`，或你明确说明当前仓库已经处于等价的最新上游状态。
+- 当前分支是本地基准分支 `dev`。
+- 当前 HEAD 等于或明确对齐最新 `upstream/dev`。
 - 没有未解决的 merge/rebase/cherry-pick 冲突。
 - `git status --short` 干净；如果启动时有用户未提交改动，必须先安全保存或明确返回 `BLOCKED`。
 - 没有你自己遗留的临时文件。
