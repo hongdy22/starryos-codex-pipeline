@@ -8,7 +8,8 @@
 4. issue #13 的 `FAIL 测试`、`测试命令`、`验证方式` 三列是本实验的权威 backlog 和 oracle。Developer 选择目标时必须记录对应行；Linux/StarryOS 验证必须优先使用该 `测试命令`，PASS/FAIL 判定必须优先使用该 `验证方式`。Reviewer 必须复核这三列是否被正确使用。
 5. 已经通过的 BusyBox 脚本基线位于 `test-suit/starryos/normal/qemu-smp1/busybox/sh/busybox-tests.sh`。每轮修复后，应该把对应 BusyBox applet 的可维护回归沉淀到这个脚本或相邻的 BusyBox 测试资产中。
 6. 每个 PASS 分支只恢复本轮修复并验证通过的 BusyBox 检查项；不要把其他尚未合入上游的 `exp3_busybox-*` 分支中恢复的检查项复制到当前分支。即使当前 `upstream/dev` 尚未包含此前 PASS 分支的修复和脚本项，journal 或 passed commits 中已 PASS 的 `FAIL 测试` 也视为 pending upstream PR，后续轮次必须避开，不得重新解决一遍。
-7. 默认先使用 riscv64 QEMU 跑通闭环，命令优先使用 `cargo xtask starry test qemu --arch riscv64 --test-group normal --test-case busybox`。之后再扩展 aarch64、x86_64、loongarch64。
-8. Reviewer PASS 后的自动提交分支必须使用 `exp3_busybox` 前缀；具体后缀由 pipeline 根据轮次和目标生成。
+7. 每修复一个 confirmed bug，优先生成一个针对该 bug 的单一源码级用户态回归测试文件（通常是一个最小 C `main.c`，必要时放入 `bugfix` 或相邻 QEMU case）。如果 BusyBox 触发逻辑过于复杂、暂时无法抽取成单一源码级测例，Developer 必须详述 bug 根本原因、完整触发链路、为什么不能抽取，以及 BusyBox 回归脚本如何覆盖该行为。
+8. 默认先使用 riscv64 QEMU 跑通闭环，命令优先使用 `cargo xtask starry test qemu --arch riscv64 --test-group normal --test-case busybox`。之后再扩展 aarch64、x86_64、loongarch64。
+9. Reviewer PASS 后的自动提交分支必须使用 `exp3_busybox` 前缀；具体后缀由 pipeline 根据轮次和目标生成。
 
 本阶段禁止大范围重构。每轮只处理一个明确 BusyBox 失败项，或一组由同一根因导致的强相关 BusyBox 语义。

@@ -55,7 +55,7 @@ StarryOS 是类 Linux 内核，支持 Alpine rootfs、部分 Linux 应用、部�
 2. 最小改动：单轮只处理一个明确问题或一组强相关问题，不夹带无关重构。
 3. 证据驱动：问题必须有复现证据，修复必须有验证证据，回归必须有通过证据。
 4. Linux 作为行为基准：BusyBox 命令的返回码、stdout/stderr、副作用，以及底层 syscall 的返回值、errno、阻塞/并发语义和资源释放语义都以 Linux 为准。
-5. Harness 优先于 patch：每次修复至少沉淀 1 个长期 BusyBox 回归资产；必要时再补最小 syscall 语义差分 harness。
+5. Harness 优先于 patch：每次修复至少沉淀 1 个长期 BusyBox 回归资产；每修复一个 confirmed bug，优先生成一个针对该 bug 的单一源码级用户态回归测试文件，必要时再补最小 syscall 语义差分 harness。
 6. Reviewer 有否决权：`REVISE` 或 `REJECT` 表示当前轮次未闭合。
 7. 多架构意识：默认考虑 x86_64、aarch64、riscv64、loongarch64 的一致性。
 
@@ -65,7 +65,7 @@ StarryOS 是类 Linux 内核，支持 Alpine rootfs、部分 Linux 应用、部�
 
 1. 选定本轮目标：优先从 <https://github.com/rcore-os/linux-compatible-testsuit/issues/13> 的 BusyBox 失败项中选择一个 applet，或选择由同一根因导致的一小组强相关 applet。必须在证据中记录 issue 行的 `FAIL 测试`、`测试命令`、`验证方式`。
 2. 建立 Linux BusyBox 基准：在 Linux 上运行 issue 行的 `测试命令` 或等价最小脚本，记录返回码、stdout/stderr、文件系统/网络/进程副作用，以及必要的 syscall 行为。必须用 issue 行的 `验证方式` 作为首要 PASS/FAIL oracle；若需要调整命令或 oracle，必须解释原因。
-3. 设计最小用户态/app 测试：优先直接复用 issue 行的 `测试命令` 和 `验证方式`，并按 `busybox-tests.sh` 风格沉淀；如果必须定位内核语义，再补 C syscall harness。
+3. 设计最小用户态/app 测试：优先直接复用 issue 行的 `测试命令` 和 `验证方式`，并按 `busybox-tests.sh` 风格沉淀；如果本轮确认了 StarryOS bug，优先再抽取一个针对该 bug 的单一源码级用户态 C 测例（通常是一个最小 `main.c`）。如果 BusyBox 触发逻辑过于复杂、暂时无法抽取成单一源码级测例，Developer 必须详述根本原因、触发链路、不能抽取的原因，以及 BusyBox 回归脚本如何覆盖该行为。
 4. 执行 Linux/StarryOS 差分验证：在 StarryOS riscv64 QEMU 中运行同一 BusyBox 命令或聚焦命令，比较返回码、stdout/stderr、errno、副作用、hang/crash/deadlock。StarryOS 的失败判定必须能被 issue 行 `验证方式` 或明确等价的 oracle 捕获。
 5. 根因分析：定位源码文件、数据结构、状态机、锁、资源生命周期和具体缺陷类型。
 6. 形成最小修复补丁：局部、可解释、不夹带无关改动。
@@ -127,6 +127,8 @@ BusyBox QEMU 配置位于：
 
 只能加入或恢复本轮修复项对应的检查。不要为了“累计进度”把此前 PASS 但尚未合入上游的 BusyBox 检查项一起放进当前分支；这些检查项应等待各自 PR 合入后自然出现在 `upstream/dev`。
 
+如果本轮修复的是可归约的 StarryOS bug，还应该优先新增一个单一源码级用户态回归测试文件，避免只留下 BusyBox 脚本级覆盖。只有当 applet 初始化、脚本环境、文件系统布局、网络设备或并发时序等触发条件过于复杂时，才可以不新增单一源码级测例；此时必须在 Developer 输出中说明根本原因、触发逻辑、不可抽取原因和剩余风险。
+
 如果需要新增源码级 QEMU C case，优先放在：
 
 `test-suit/starryos/normal/qemu-smp1/<case>/`
@@ -168,5 +170,6 @@ BusyBox QEMU 配置位于：
 - 必须体现“写测例 -> 对比验证 -> 修复 -> 回归 -> 审查 -> 沉淀”的闭环状态。
 - BusyBox 目标必须体现 issue #13 对应行的 `FAIL 测试`、`测试命令` 和 `验证方式`，并说明最终回归脚本如何使用这些信息。
 - BusyBox 目标必须说明是否查过 journal/passed commits 以避免重复解决已 PASS 但未合入的失败项。
+- confirmed bug 的输出必须说明是否新增了单一源码级用户态回归测试文件；如果没有新增，必须详述 bug 根本原因、触发逻辑、不可抽取原因和 BusyBox 回归覆盖方式。
 - Developer 必须把未闭合证据写进 `evidence` 和 `next_action`。
 - Reviewer 必须用 `PASS` / `REVISE` / `REJECT` 给出明确结论，并把下一轮整改要求写进 `next_prompt_to_developer`。
