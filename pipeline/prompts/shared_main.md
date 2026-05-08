@@ -63,7 +63,7 @@ StarryOS 是类 Linux 内核，支持 Alpine rootfs、部分 Linux 应用、部�
 
 每一轮必须按顺序推进：
 
-1. 选定本轮目标：优先从 <https://github.com/rcore-os/linux-compatible-testsuit/issues/13> 的 BusyBox 失败项中选择一个 applet，或选择由同一根因导致的一小组强相关 applet。必须在证据中记录 issue 行的 `FAIL 测试`、`测试命令`、`验证方式`。
+1. 选定本轮目标：必须优先从“当前确认缺实现的 BusyBox backlog”中选择一个 `FAIL 测试`，或选择由同一根因导致的一小组强相关 `FAIL 测试`。必须在证据中记录 issue 行的 `FAIL 测试`、`测试命令`、`验证方式`。
 2. 建立 Linux BusyBox 基准：在 Linux 上运行 issue 行的 `测试命令` 或等价最小脚本，记录返回码、stdout/stderr、文件系统/网络/进程副作用，以及必要的 syscall 行为。必须用 issue 行的 `验证方式` 作为首要 PASS/FAIL oracle；若需要调整命令或 oracle，必须解释原因。
 3. 设计最小用户态/app 测试：优先直接复用 issue 行的 `测试命令` 和 `验证方式`，并按 `busybox-tests.sh` 风格沉淀；如果本轮确认了 StarryOS bug，优先再抽取一个针对该 bug 的单一源码级用户态 C 测例（通常是一个最小 `main.c`）。如果 BusyBox 触发逻辑过于复杂、暂时无法抽取成单一源码级测例，Developer 必须详述根本原因、触发链路、不能抽取的原因，以及 BusyBox 回归脚本如何覆盖该行为。
 4. 执行 Linux/StarryOS 差分验证：在 StarryOS riscv64 QEMU 中运行同一 BusyBox 命令或聚焦命令，比较返回码、stdout/stderr、errno、副作用、hang/crash/deadlock。StarryOS 的失败判定必须能被 issue 行 `验证方式` 或明确等价的 oracle 捕获。
@@ -77,6 +77,8 @@ StarryOS 是类 Linux 内核，支持 Alpine rootfs、部分 Linux 应用、部�
 
 跨轮次选择约束：
 
+- 当前确认缺实现的 BusyBox backlog 是：`busybox_acpid`、`busybox_add_shell`、`busybox_arp`、`busybox_arping`、`busybox_crond`、`busybox_crontab`、`busybox_fdflush`、`busybox_getopt`、`busybox_hostid`、`busybox_hwclock`、`busybox_ifconfig`、`busybox_ifenslave`、`busybox_insmod`、`busybox_iostat`、`busybox_ip`、`busybox_ipaddr`、`busybox_ipcalc`、`busybox_iplink`、`busybox_killall5`、`busybox_lzcat`、`busybox_lzma`、`busybox_nice`、`busybox_nohup`、`busybox_pidof`、`busybox_ping`、`busybox_pipe_progress`、`busybox_raidautorun`、`busybox_rdev`、`busybox_remove_shell`、`busybox_resize`、`busybox_run_parts`、`busybox_setlogcons`、`busybox_ttysize`、`blkid`、`blkdiscard`、`blockdev`。
+- 除非 Orchestrator 的 journal 或 passed commits 已明确记录某项 `PASS`，后续轮次必须从上述 backlog 里逐步选择目标；不要重新解决不在该列表中的 BusyBox 项，也不要因为某项静态出现在 `busybox-tests.sh` 就默认它已经满足 issue #13 的 oracle。
 - 如果 Orchestrator 提供的 journal 或上一轮 reviewer 输出显示某个 target 已经 `PASS`，下一轮必须选择新的目标。
 - 已 `PASS` 但尚未提交的源码改动视为当前基线，不要因为 `git status` 里仍有这些文件就重复做同一轮工作。
 - BusyBox 实验中，`journal` 或 `passed_commits` 里已 PASS 的 `FAIL 测试` 视为已解决但可能仍在等待上游合入。即使当前 `upstream/dev` 或 `busybox-tests.sh` 还没有这些改动，下一轮也不得重新选择同一个 `FAIL 测试`。
@@ -91,11 +93,12 @@ StarryOS 是类 Linux 内核，支持 Alpine rootfs、部分 Linux 应用、部�
 
 优先关注：
 
-1. BusyBox 失败列表中能用短命令稳定复现的 applet。
-2. 文件与目录类 applet：`chown`、`cpio`、`link`、`mkdir`、`mv`、`rmdir`、`split`、`tail`、`tar` 等。
-3. 进程、shell、定时任务类 applet：`crond`、`crontab`、`env`、`nice`、`nohup`、`pidof`、`run-parts` 等。
-4. 网络、设备、proc/sys 类 applet：`arp`、`arping`、`ifconfig`、`ip`、`ping`、`blkid`、`blockdev` 等。
-5. 一次修复能解锁多个 BusyBox applet 的通用 syscall 或伪文件系统能力。
+1. 当前确认缺实现 backlog 中能用短命令稳定复现的 applet。
+2. 网络、设备、proc/sys 类 applet：`busybox_arp`、`busybox_arping`、`busybox_ifconfig`、`busybox_ifenslave`、`busybox_ip`、`busybox_ipaddr`、`busybox_ipcalc`、`busybox_iplink`、`busybox_ping`、`busybox_iostat` 等。
+3. 进程、shell、定时任务类 applet：`busybox_add_shell`、`busybox_crond`、`busybox_crontab`、`busybox_getopt`、`busybox_killall5`、`busybox_nice`、`busybox_nohup`、`busybox_pidof`、`busybox_pipe_progress`、`busybox_remove_shell`、`busybox_run_parts` 等。
+4. 设备、块设备、终端和系统信息类 applet：`busybox_acpid`、`busybox_fdflush`、`busybox_hostid`、`busybox_hwclock`、`busybox_insmod`、`busybox_raidautorun`、`busybox_rdev`、`busybox_resize`、`busybox_setlogcons`、`busybox_ttysize`、`blkid`、`blkdiscard`、`blockdev` 等。
+5. 压缩/归档相关 applet：`busybox_lzcat`、`busybox_lzma`。
+6. 一次修复能解锁多个 backlog 项的通用 syscall、ioctl、伪文件系统或设备能力。
 
 如果无法设计最小差分测例、需要大规模重构、修复风险远大于收益，必须降级或搁置。
 
@@ -169,6 +172,7 @@ BusyBox QEMU 配置位于：
 - 不要省略风险与边界条件。
 - 必须体现“写测例 -> 对比验证 -> 修复 -> 回归 -> 审查 -> 沉淀”的闭环状态。
 - BusyBox 目标必须体现 issue #13 对应行的 `FAIL 测试`、`测试命令` 和 `验证方式`，并说明最终回归脚本如何使用这些信息。
+- BusyBox 目标必须来自当前确认缺实现 backlog，或明确说明为什么该目标已由 journal/passed commits 排除后选择了同根因的其他 backlog 项。
 - BusyBox 目标必须说明是否查过 journal/passed commits 以避免重复解决已 PASS 但未合入的失败项。
 - confirmed bug 的输出必须说明是否新增了单一源码级用户态回归测试文件；如果没有新增，必须详述 bug 根本原因、触发逻辑、不可抽取原因和 BusyBox 回归覆盖方式。
 - Developer 必须把未闭合证据写进 `evidence` 和 `next_action`。

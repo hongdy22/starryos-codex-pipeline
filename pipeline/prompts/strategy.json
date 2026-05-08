@@ -7,21 +7,64 @@
     "leverage": 0.1,
     "regression_maintainability": 0.1
   },
+  "confirmed_missing_backlog": [
+    "busybox_acpid",
+    "busybox_add_shell",
+    "busybox_arp",
+    "busybox_arping",
+    "busybox_crond",
+    "busybox_crontab",
+    "busybox_fdflush",
+    "busybox_getopt",
+    "busybox_hostid",
+    "busybox_hwclock",
+    "busybox_ifconfig",
+    "busybox_ifenslave",
+    "busybox_insmod",
+    "busybox_iostat",
+    "busybox_ip",
+    "busybox_ipaddr",
+    "busybox_ipcalc",
+    "busybox_iplink",
+    "busybox_killall5",
+    "busybox_lzcat",
+    "busybox_lzma",
+    "busybox_nice",
+    "busybox_nohup",
+    "busybox_pidof",
+    "busybox_ping",
+    "busybox_pipe_progress",
+    "busybox_raidautorun",
+    "busybox_rdev",
+    "busybox_remove_shell",
+    "busybox_resize",
+    "busybox_run_parts",
+    "busybox_setlogcons",
+    "busybox_ttysize",
+    "blkid",
+    "blkdiscard",
+    "blockdev"
+  ],
   "initial_target_groups": [
     {
-      "name": "busybox_file_directory_applets",
-      "examples": ["chown", "cpio", "link", "mkdir", "mv", "rmdir", "split", "tail", "tar"],
-      "why": "这些 BusyBox 失败项通常能用短命令稳定复现，并直接暴露 StarryOS 文件/目录语义缺口。"
+      "name": "busybox_network_proc_device_applets",
+      "examples": ["busybox_arp", "busybox_arping", "busybox_ifconfig", "busybox_ifenslave", "busybox_ip", "busybox_ipaddr", "busybox_ipcalc", "busybox_iplink", "busybox_ping", "busybox_iostat"],
+      "why": "这些已确认缺实现项集中暴露网络设备、伪文件系统、ioctl 和 proc 能力缺口。"
     },
     {
       "name": "busybox_process_shell_applets",
-      "examples": ["crond", "crontab", "env", "nice", "nohup", "pidof", "run-parts"],
-      "why": "这些 BusyBox applet 覆盖 shell、进程、环境变量、定时任务和等待退出语义。"
+      "examples": ["busybox_add_shell", "busybox_crond", "busybox_crontab", "busybox_getopt", "busybox_killall5", "busybox_nice", "busybox_nohup", "busybox_pidof", "busybox_pipe_progress", "busybox_remove_shell", "busybox_run_parts"],
+      "why": "这些已确认缺实现项覆盖 shell、进程、定时任务、信号和等待退出语义。"
     },
     {
-      "name": "busybox_network_device_applets",
-      "examples": ["arp", "arping", "ifconfig", "ip", "ping", "blkid", "blockdev"],
-      "why": "这些 BusyBox 失败项集中暴露网络设备、伪文件系统、ioctl 和块设备能力缺口。"
+      "name": "busybox_system_block_terminal_applets",
+      "examples": ["busybox_acpid", "busybox_fdflush", "busybox_hostid", "busybox_hwclock", "busybox_insmod", "busybox_raidautorun", "busybox_rdev", "busybox_resize", "busybox_setlogcons", "busybox_ttysize", "blkid", "blkdiscard", "blockdev"],
+      "why": "这些已确认缺实现项集中暴露块设备、终端、系统信息和设备控制能力缺口。"
+    },
+    {
+      "name": "busybox_compression_applets",
+      "examples": ["busybox_lzcat", "busybox_lzma"],
+      "why": "这些已确认缺实现项可用于定位压缩 applet 或底层文件/管道语义问题。"
     }
   ],
   "review_policy": {

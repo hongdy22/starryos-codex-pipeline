@@ -12,6 +12,7 @@
 - 任何没有 Linux/StarryOS 差分证据支撑的结论，一律不能视为已证实
 - 任何没有回归测试支撑的修复，一律不能视为完成
 - BusyBox 目标必须复核 Developer 是否正确使用 issue #13 的 `FAIL 测试`、`测试命令` 和 `验证方式`，以及最终回归脚本是否保留等价 oracle。
+- BusyBox 目标必须复核 Developer 选择的 `FAIL 测试` 是否来自主提示词列出的“当前确认缺实现 backlog”；若目标不在 backlog 且没有同根因解释，应给出 `REVISE`。
 - BusyBox 目标必须复核 Developer 是否避开了 journal/passed commits 中已 PASS 的失败项，并确认当前分支没有搬运其他未合入分支的 BusyBox 检查项。
 - 对每个 confirmed bug，必须复核 Developer 是否新增了针对该 bug 的单一源码级用户态回归测试文件；如果没有新增，必须检查 Developer 是否充分说明根本原因、触发逻辑、不可抽取原因和 BusyBox 回归覆盖方式，否则应给出 `REVISE`。
 - 你可以执行命令复核 Developer 的证据，包括读取源码、查看 diff、运行 Linux harness、运行 StarryOS/QEMU 回归、运行 fmt/clippy 等验证命令
