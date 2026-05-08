@@ -6,6 +6,9 @@
 闭环形态：
 
 ```text
+Syncer Codex 先同步 tgoskits 到上游最新 dev
+        |
+        v
 Developer Codex 写测例/跑差分/修补丁
         |
         v
@@ -124,12 +127,13 @@ pipeline/
 - `tgoskits` 相对路径
 - `StarryOS` 相对路径
 - Codex binary、tarball、auth 路径
-- Developer/Reviewer 的模型、推理强度、沙箱策略
+- Syncer/Developer/Reviewer 的模型、推理强度、沙箱策略
 
 [pipeline/prompts/](pipeline/prompts)
 
 人工定义的目标、策略和角色规则：
 
+- `syncer_role.md`：启动前同步 `tgoskits` 到上游最新 `dev` 的规则
 - `developer_role.md`：Developer 角色规则
 - `reviewer_role.md`：Reviewer 角色规则
 - `shared_main.md`：StarryOS 路径、闭环流程、测试先行、Linux 基准、输出要求
@@ -141,6 +145,7 @@ pipeline/
 确定性的执行护栏，不交给 AI 自由发挥：
 
 - `preflight.json`：检查 `tgoskits`、StarryOS 路径、Codex auth、本地 Codex binary/tarball。
+- `post_syncer.json`：校验 Syncer JSON，并记录同步后的 `git diff --check`。
 - `post_developer.json`：校验 Developer JSON、保存 patch、记录 `git diff --check`。
 - `post_reviewer.json`：校验 Reviewer JSON，并检查 Reviewer 是否改变了 Developer diff。
 - `on_pass.json`：PASS 后生成本轮摘要和 PR body 草稿。
@@ -162,6 +167,7 @@ Codex 可安装格式的短 playbook，每个 skill 都是独立目录：
 
 Codex 最终输出必须符合的 JSON Schema：
 
+- `syncer.json`
 - `developer.json`
 - `reviewer.json`
 
@@ -197,19 +203,26 @@ pipeline/results/
 
 ```text
 1. 读取 config/prompts/schemas 和 results/state
-2. 生成 Developer prompt
-3. 调用 Developer Codex，可写 `tgoskits`
-4. 保存 developer_output.json
-5. 生成 Reviewer prompt
-6. 调用 Reviewer Codex，拥有完整执行权限，但 prompt 要求不要留下源码改动
-7. 保存 reviewer_output.json
-8. Reviewer PASS 则停止，否则把意见带入下一轮
+2. 生成 Syncer prompt
+3. 调用 Syncer Codex，确保 `tgoskits` 已 fetch/rebase 到最新 `upstream/dev`
+4. Syncer 返回 READY 才继续；返回 BLOCKED 则停止并保存原因
+5. 生成 Developer prompt
+6. 调用 Developer Codex，可写 `tgoskits`
+7. 保存 developer_output.json
+8. 生成 Reviewer prompt
+9. 调用 Reviewer Codex，拥有完整执行权限，但 prompt 要求不要留下源码改动
+10. 保存 reviewer_output.json
+11. Reviewer PASS 则停止，否则把意见带入下一轮
 ```
 
 输出示例：
 
 ```text
 pipeline/results/rounds/round-001/
+├── syncer_prompt.txt
+├── syncer_output.json
+├── syncer_events.jsonl
+├── syncer.patch
 ├── developer_prompt.txt
 ├── developer_output.json
 ├── developer_events.jsonl
@@ -224,7 +237,7 @@ pipeline/results/rounds/round-001/
 └── pr_body_draft.md
 ```
 
-`dry-run` 只生成 Developer prompt 和一个占位输出，不调用 Codex。
+`dry-run` 会生成 Syncer/Developer prompt 和占位输出，不调用 Codex。
 
 ## 6. 为什么每轮都生成 prompt
 
@@ -237,6 +250,7 @@ pipeline/results/rounds/round-001/
 固定规则来自：
 
 ```text
+pipeline/prompts/syncer_role.md
 pipeline/prompts/developer_role.md
 pipeline/prompts/shared_main.md
 pipeline/prompts/goal.md
@@ -255,6 +269,8 @@ pipeline/results/state/journal.md 的最近轮次摘要
 
 prompt 不内嵌完整 `git diff`。Codex 需要时自己运行 `git diff` 和读取文件，这样上下文更准，也不容易塞爆 prompt。
 如果某个 target 已经 `PASS`，下一轮 prompt 会明确要求 Developer 不要重复选择它；只有 Reviewer 要求补测或修订时，才继续同一个 target。
+
+Syncer prompt 只在每次 loop 启动后的第一轮前生成一次。它会让 Codex 自己检查远端、fetch 最新 `upstream/dev`、处理 rebase/冲突，并输出 `READY` 或 `BLOCKED`。这样仓库更新逻辑不靠脚本硬编码，遇到复杂冲突时由 Codex 读代码后处理。
 
 ## 7. StarryOS 测试约定
 

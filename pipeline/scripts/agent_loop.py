@@ -166,15 +166,64 @@ def git_snapshot(project_root: Path) -> dict[str, str]:
     return snapshot
 
 
+def git_remotes(project_root: Path) -> str:
+    proc = run_cmd(["git", "remote", "-v"], project_root)
+    if proc.returncode != 0:
+        return f"ERROR({proc.returncode}): {proc.stderr.strip()}"
+    return proc.stdout.strip()
+
+
+def build_syncer_prompt(config: dict[str, Any], round_no: int) -> str:
+    project_root = as_path(config, "project_root")
+    sync_config = config.get("sync", {})
+    snapshot = git_snapshot(project_root)
+    remotes = git_remotes(project_root)
+
+    return f"""{read_text(PROMPTS / "syncer_role.md")}
+
+# 当前同步配置
+project_root = {config.get("project_root", "tgoskits")}
+base_remote = {sync_config.get("base_remote", "upstream")}
+base_repo = {sync_config.get("base_repo", "https://github.com/rcore-os/tgoskits.git")}
+base_branch = {sync_config.get("base_branch", "dev")}
+
+# 当前轮次
+round = {round_no}
+
+# 当前工作目录
+你会在 `project_root` 仓库根目录中运行。路径来自配置，请使用相对路径和 git 原生命令。
+
+# 当前 tgoskits 轻量 git 状态
+branch = {snapshot.get("branch", "")}
+head = {snapshot.get("head", "")}
+
+## git status --short
+{snapshot.get("status", "") or "(clean)"}
+
+## git remote -v
+{remotes or "(no remotes)"}
+
+# 输出要求
+- 严格输出符合 `pipeline/schemas/syncer.json` 的 JSON。
+- 如果已经是最新，`actions_taken` 写清你检查了什么。
+- 如果执行了 stash、rebase、冲突解决或备份分支，必须在 `actions_taken` 和 `preserved_changes` 中写清。
+- 如果无法安全完成同步，返回 `status = "BLOCKED"`，并在 `next_action` 写清人工要做什么。
+"""
+
+
 def build_developer_prompt(
     config: dict[str, Any],
     round_no: int,
     previous_review: dict[str, Any] | None,
+    startup_sync: dict[str, Any] | None = None,
 ) -> str:
     project_root = as_path(config, "project_root")
     snapshot = git_snapshot(project_root)
     previous_review_block = (
         json.dumps(previous_review, ensure_ascii=False, indent=2) if previous_review else "无上一轮 reviewer 反馈。"
+    )
+    startup_sync_block = (
+        json.dumps(startup_sync, ensure_ascii=False, indent=2) if startup_sync else "本轮没有新的启动同步结果。"
     )
     journal_block = read_text(RESULT_STATE / "journal.md", "暂无已完成轮次。")[:12000]
 
@@ -193,6 +242,9 @@ def build_developer_prompt(
 
 # 当前轮次
 round = {round_no}
+
+# 启动同步结果
+{startup_sync_block}
 
 # 当前 tgoskits 轻量 git 状态
 branch = {snapshot.get("branch", "")}
@@ -397,6 +449,72 @@ def main() -> int:
     if not args.dry_run:
         codex_bin, codex_env = prepare_codex(config)
 
+    startup_sync_output: dict[str, Any] | None = None
+    startup_sync_artifacts: dict[str, Any] | None = None
+    startup_sync_hook: dict[str, Any] | None = None
+    sync_enabled = bool(config.get("sync", {}).get("enabled", True))
+    if sync_enabled:
+        first_round_dir = ROUNDS / f"round-{first_round:03d}"
+        first_round_dir.mkdir(parents=True, exist_ok=True)
+        sync_prompt = build_syncer_prompt(config, first_round)
+        write_text(first_round_dir / "syncer_prompt.txt", sync_prompt)
+        if args.dry_run:
+            startup_sync_output = {
+                "round": first_round,
+                "role": "SYNCER",
+                "status": "READY",
+                "summary": "Prompt generated only; Codex was not invoked.",
+                "base_remote": config.get("sync", {}).get("base_remote", "upstream"),
+                "base_branch": config.get("sync", {}).get("base_branch", "dev"),
+                "start_branch": "",
+                "start_head": "",
+                "final_branch": "",
+                "final_head": "",
+                "commands_run": [],
+                "actions_taken": ["dry-run generated syncer prompt"],
+                "conflicts": [],
+                "preserved_changes": [],
+                "next_action": "Run without --dry-run to invoke Syncer Codex.",
+            }
+            write_json(first_round_dir / "syncer_output.json", startup_sync_output)
+            startup_sync_hook = hook_runner.run(
+                "post_syncer",
+                dry_run=True,
+                round_dir=first_round_dir,
+                schema_path=SCHEMAS / "syncer.json",
+                output_path=first_round_dir / "syncer_output.json",
+            )
+        else:
+            assert codex_bin is not None and codex_env is not None
+            startup_sync_output = run_codex_role(
+                config=config,
+                codex_bin=codex_bin,
+                codex_env=codex_env,
+                role_name="syncer",
+                prompt=sync_prompt,
+                schema_path=SCHEMAS / "syncer.json",
+                output_path=first_round_dir / "syncer_output.json",
+                event_log_path=first_round_dir / "syncer_events.jsonl",
+            )
+            startup_sync_hook = hook_runner.run(
+                "post_syncer",
+                round_dir=first_round_dir,
+                schema_path=SCHEMAS / "syncer.json",
+                output_path=first_round_dir / "syncer_output.json",
+            )
+            startup_sync_artifacts = capture_git_artifacts(project_root, first_round_dir, "syncer")
+            if startup_sync_output.get("status") != "READY":
+                write_verification(
+                    first_round_dir,
+                    {
+                        "round": first_round,
+                        "syncer": startup_sync_output,
+                        "hooks": {"preflight": preflight, "post_syncer": startup_sync_hook},
+                        "artifacts": {"syncer_git": startup_sync_artifacts},
+                    },
+                )
+                raise PipelineError(f"syncer blocked pipeline: {startup_sync_output.get('next_action', '')}")
+
     for round_no in range(first_round, first_round + args.max_rounds):
         round_dir = ROUNDS / f"round-{round_no:03d}"
         round_dir.mkdir(parents=True, exist_ok=True)
@@ -405,6 +523,7 @@ def main() -> int:
             config,
             round_no,
             previous_review,
+            startup_sync_output if round_no == first_round else None,
         )
         write_text(round_dir / "developer_prompt.txt", dev_prompt)
 
@@ -435,14 +554,24 @@ def main() -> int:
                     "round_dir": str(round_dir.relative_to(ROOT)),
                 },
             )
-            write_verification(round_dir, {"hooks": {"preflight": preflight}, "dry_run": True})
+            dry_verification = {"hooks": {"preflight": preflight}, "dry_run": True}
+            if startup_sync_hook is not None:
+                dry_verification["hooks"]["post_syncer"] = startup_sync_hook
+            if startup_sync_output is not None:
+                dry_verification["syncer"] = startup_sync_output
+            write_verification(round_dir, dry_verification)
+            dry_summary_hooks = {"preflight": preflight}
+            if startup_sync_hook is not None:
+                dry_summary_hooks["post_syncer"] = startup_sync_hook
             write_round_summary(
                 round_dir=round_dir,
                 round_no=round_no,
                 developer=dry_dev,
                 reviewer=None,
-                hooks={"preflight": preflight},
-                artifacts={},
+                hooks=dry_summary_hooks,
+                artifacts={"syncer_output": str(round_dir / "syncer_output.json")}
+                if startup_sync_output is not None
+                else {},
             )
             print(json.dumps(dry_dev, ensure_ascii=False, indent=2))
             return 0
@@ -450,6 +579,13 @@ def main() -> int:
         assert codex_bin is not None and codex_env is not None
         hook_results: dict[str, Any] = {"preflight": preflight}
         artifact_results: dict[str, Any] = {}
+        if round_no == first_round:
+            if startup_sync_hook is not None:
+                hook_results["post_syncer"] = startup_sync_hook
+            if startup_sync_output is not None:
+                artifact_results["syncer_output"] = str(round_dir / "syncer_output.json")
+            if startup_sync_artifacts is not None:
+                artifact_results["syncer_git"] = startup_sync_artifacts
         developer_output = run_codex_role(
             config=config,
             codex_bin=codex_bin,

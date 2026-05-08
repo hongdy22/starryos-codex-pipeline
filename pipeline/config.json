@@ -12,6 +12,20 @@
   "codex_auth_json": "codex/auth.json",
   "default_arch": "riscv64",
   "default_test_group": "normal",
+  "sync": {
+    "enabled": true,
+    "base_remote": "upstream",
+    "base_repo": "https://github.com/rcore-os/tgoskits.git",
+    "base_branch": "dev"
+  },
+  "syncer": {
+    "model": "gpt-5.5",
+    "reasoning_effort": "high",
+    "service_tier": "fast",
+    "full_access": true,
+    "sandbox": "danger-full-access",
+    "ephemeral": true
+  },
   "developer": {
     "model": "gpt-5.5",
     "reasoning_effort": "xhigh",

@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "round": { "type": "integer", "minimum": 1 },
+    "role": { "type": "string", "const": "SYNCER" },
+    "status": {
+      "type": "string",
+      "enum": ["READY", "BLOCKED"]
+    },
+    "summary": { "type": "string" },
+    "base_remote": { "type": "string" },
+    "base_branch": { "type": "string" },
+    "start_branch": { "type": "string" },
+    "start_head": { "type": "string" },
+    "final_branch": { "type": "string" },
+    "final_head": { "type": "string" },
+    "commands_run": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "actions_taken": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "conflicts": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "preserved_changes": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "next_action": { "type": "string" }
+  },
+  "required": [
+    "round",
+    "role",
+    "status",
+    "summary",
+    "base_remote",
+    "base_branch",
+    "start_branch",
+    "start_head",
+    "final_branch",
+    "final_head",
+    "commands_run",
+    "actions_taken",
+    "conflicts",
+    "preserved_changes",
+    "next_action"
+  ]
+}
