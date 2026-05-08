@@ -63,10 +63,10 @@ StarryOS 是类 Linux 内核，支持 Alpine rootfs、部分 Linux 应用、部�
 
 每一轮必须按顺序推进：
 
-1. 选定本轮目标：优先从 <https://github.com/rcore-os/linux-compatible-testsuit/issues/13> 的 BusyBox 失败项中选择一个 applet，或选择由同一根因导致的一小组强相关 applet。
-2. 建立 Linux BusyBox 基准：在 Linux 上运行等价 BusyBox 命令或最小脚本，记录返回码、stdout/stderr、文件系统/网络/进程副作用，以及必要的 syscall 行为。
-3. 设计最小用户态/app 测试：优先使用 shell 命令片段或 `busybox-tests.sh` 风格脚本；如果必须定位内核语义，再补 C syscall harness。
-4. 执行 Linux/StarryOS 差分验证：在 StarryOS riscv64 QEMU 中运行 BusyBox case 或聚焦命令，比较返回码、stdout/stderr、errno、副作用、hang/crash/deadlock。
+1. 选定本轮目标：优先从 <https://github.com/rcore-os/linux-compatible-testsuit/issues/13> 的 BusyBox 失败项中选择一个 applet，或选择由同一根因导致的一小组强相关 applet。必须在证据中记录 issue 行的 `FAIL 测试`、`测试命令`、`验证方式`。
+2. 建立 Linux BusyBox 基准：在 Linux 上运行 issue 行的 `测试命令` 或等价最小脚本，记录返回码、stdout/stderr、文件系统/网络/进程副作用，以及必要的 syscall 行为。必须用 issue 行的 `验证方式` 作为首要 PASS/FAIL oracle；若需要调整命令或 oracle，必须解释原因。
+3. 设计最小用户态/app 测试：优先直接复用 issue 行的 `测试命令` 和 `验证方式`，并按 `busybox-tests.sh` 风格沉淀；如果必须定位内核语义，再补 C syscall harness。
+4. 执行 Linux/StarryOS 差分验证：在 StarryOS riscv64 QEMU 中运行同一 BusyBox 命令或聚焦命令，比较返回码、stdout/stderr、errno、副作用、hang/crash/deadlock。StarryOS 的失败判定必须能被 issue 行 `验证方式` 或明确等价的 oracle 捕获。
 5. 根因分析：定位源码文件、数据结构、状态机、锁、资源生命周期和具体缺陷类型。
 6. 形成最小修复补丁：局部、可解释、不夹带无关改动。
 7. 回归验证：复现用例、BusyBox 全量或聚焦 QEMU case、相邻 applet smoke、已有相关 harness、必要时 syscall 级 smoke。
@@ -121,6 +121,8 @@ BusyBox QEMU 配置位于：
 
 修复某个 BusyBox 失败项后，优先把该 applet 的可维护检查加入 `busybox-tests.sh`，并确保 riscv64 `busybox` case 通过。
 
+加入或恢复 BusyBox 检查时，脚本中的命令和判断应尽量保持 issue #13 对应行的 `测试命令` 与 `验证方式`。如果为了稳定性、隔离性或 StarryOS 环境差异做了改写，必须在 Developer 输出中说明等价关系和风险。
+
 如果需要新增源码级 QEMU C case，优先放在：
 
 `test-suit/starryos/normal/qemu-smp1/<case>/`
@@ -160,5 +162,6 @@ BusyBox QEMU 配置位于：
 - 不要把“可能”说成“已经证实”。
 - 不要省略风险与边界条件。
 - 必须体现“写测例 -> 对比验证 -> 修复 -> 回归 -> 审查 -> 沉淀”的闭环状态。
+- BusyBox 目标必须体现 issue #13 对应行的 `FAIL 测试`、`测试命令` 和 `验证方式`，并说明最终回归脚本如何使用这些信息。
 - Developer 必须把未闭合证据写进 `evidence` 和 `next_action`。
 - Reviewer 必须用 `PASS` / `REVISE` / `REJECT` 给出明确结论，并把下一轮整改要求写进 `next_prompt_to_developer`。
