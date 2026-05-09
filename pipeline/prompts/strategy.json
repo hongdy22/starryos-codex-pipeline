@@ -40,10 +40,7 @@
     "busybox_resize",
     "busybox_run_parts",
     "busybox_setlogcons",
-    "busybox_ttysize",
-    "blkid",
-    "blkdiscard",
-    "blockdev"
+    "busybox_ttysize"
   ],
   "initial_target_groups": [
     {
@@ -58,8 +55,8 @@
     },
     {
       "name": "busybox_system_block_terminal_applets",
-      "examples": ["busybox_acpid", "busybox_fdflush", "busybox_hostid", "busybox_hwclock", "busybox_insmod", "busybox_raidautorun", "busybox_rdev", "busybox_resize", "busybox_setlogcons", "busybox_ttysize", "blkid", "blkdiscard", "blockdev"],
-      "why": "这些已确认缺实现项集中暴露块设备、终端、系统信息和设备控制能力缺口。"
+      "examples": ["busybox_acpid", "busybox_fdflush", "busybox_hostid", "busybox_hwclock", "busybox_insmod", "busybox_raidautorun", "busybox_rdev", "busybox_resize", "busybox_setlogcons", "busybox_ttysize"],
+      "why": "这些已确认缺实现项集中暴露终端、系统信息和设备控制能力缺口。"
     },
     {
       "name": "busybox_compression_applets",

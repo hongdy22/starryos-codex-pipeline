@@ -77,7 +77,7 @@ StarryOS 是类 Linux 内核，支持 Alpine rootfs、部分 Linux 应用、部�
 
 跨轮次选择约束：
 
-- 当前确认缺实现的 BusyBox backlog 是：`busybox_acpid`、`busybox_add_shell`、`busybox_arp`、`busybox_arping`、`busybox_crond`、`busybox_crontab`、`busybox_fdflush`、`busybox_getopt`、`busybox_hostid`、`busybox_hwclock`、`busybox_ifconfig`、`busybox_ifenslave`、`busybox_insmod`、`busybox_iostat`、`busybox_ip`、`busybox_ipaddr`、`busybox_ipcalc`、`busybox_iplink`、`busybox_killall5`、`busybox_lzcat`、`busybox_lzma`、`busybox_nice`、`busybox_nohup`、`busybox_pidof`、`busybox_ping`、`busybox_pipe_progress`、`busybox_raidautorun`、`busybox_rdev`、`busybox_remove_shell`、`busybox_resize`、`busybox_run_parts`、`busybox_setlogcons`、`busybox_ttysize`、`blkid`、`blkdiscard`、`blockdev`。
+- 当前确认缺实现的 BusyBox backlog 是：`busybox_acpid`、`busybox_add_shell`、`busybox_arp`、`busybox_arping`、`busybox_crond`、`busybox_crontab`、`busybox_fdflush`、`busybox_getopt`、`busybox_hostid`、`busybox_hwclock`、`busybox_ifconfig`、`busybox_ifenslave`、`busybox_insmod`、`busybox_iostat`、`busybox_ip`、`busybox_ipaddr`、`busybox_ipcalc`、`busybox_iplink`、`busybox_killall5`、`busybox_lzcat`、`busybox_lzma`、`busybox_nice`、`busybox_nohup`、`busybox_pidof`、`busybox_ping`、`busybox_pipe_progress`、`busybox_raidautorun`、`busybox_rdev`、`busybox_remove_shell`、`busybox_resize`、`busybox_run_parts`、`busybox_setlogcons`、`busybox_ttysize`。
 - 除非 Orchestrator 的 journal 或 passed commits 已明确记录某项 `PASS`，后续轮次必须从上述 backlog 里逐步选择目标；不要重新解决不在该列表中的 BusyBox 项，也不要因为某项静态出现在 `busybox-tests.sh` 就默认它已经满足 issue #13 的 oracle。
 - 如果 Orchestrator 提供的 journal 或上一轮 reviewer 输出显示某个 target 已经 `PASS`，下一轮必须选择新的目标。
 - 已 `PASS` 但尚未提交的源码改动视为当前基线，不要因为 `git status` 里仍有这些文件就重复做同一轮工作。
@@ -96,7 +96,7 @@ StarryOS 是类 Linux 内核，支持 Alpine rootfs、部分 Linux 应用、部�
 1. 当前确认缺实现 backlog 中能用短命令稳定复现的 applet。
 2. 网络、设备、proc/sys 类 applet：`busybox_arp`、`busybox_arping`、`busybox_ifconfig`、`busybox_ifenslave`、`busybox_ip`、`busybox_ipaddr`、`busybox_ipcalc`、`busybox_iplink`、`busybox_ping`、`busybox_iostat` 等。
 3. 进程、shell、定时任务类 applet：`busybox_add_shell`、`busybox_crond`、`busybox_crontab`、`busybox_getopt`、`busybox_killall5`、`busybox_nice`、`busybox_nohup`、`busybox_pidof`、`busybox_pipe_progress`、`busybox_remove_shell`、`busybox_run_parts` 等。
-4. 设备、块设备、终端和系统信息类 applet：`busybox_acpid`、`busybox_fdflush`、`busybox_hostid`、`busybox_hwclock`、`busybox_insmod`、`busybox_raidautorun`、`busybox_rdev`、`busybox_resize`、`busybox_setlogcons`、`busybox_ttysize`、`blkid`、`blkdiscard`、`blockdev` 等。
+4. 设备、终端和系统信息类 applet：`busybox_acpid`、`busybox_fdflush`、`busybox_hostid`、`busybox_hwclock`、`busybox_insmod`、`busybox_raidautorun`、`busybox_rdev`、`busybox_resize`、`busybox_setlogcons`、`busybox_ttysize` 等。
 5. 压缩/归档相关 applet：`busybox_lzcat`、`busybox_lzma`。
 6. 一次修复能解锁多个 backlog 项的通用 syscall、ioctl、伪文件系统或设备能力。
 
